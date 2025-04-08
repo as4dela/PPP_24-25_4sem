@@ -15,3 +15,8 @@ def get_directory_structure(root_dir):
             'files': filenames
         }
     return structure
+
+# Функция для сохранения структуры в JSON-файл
+def save_structure_to_file(structure, filename='structure.json'):
+    with open(filename, 'w', encoding='utf-8') as f:
+        json.dump(structure, f, indent=4)
