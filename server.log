@@ -1,0 +1,4 @@
+2025-04-14 19:09:16,032 - INFO - Metadata generated
+2025-04-14 19:09:17,974 - INFO - Server started on localhost:5000
+2025-04-14 19:10:18,316 - INFO - Accepted connection from ('127.0.0.1', 1583)
+2025-04-14 19:10:22,318 - INFO - Received command: list

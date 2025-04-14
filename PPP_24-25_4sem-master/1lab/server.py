@@ -1,65 +1,97 @@
 import os
 import json
+import struct
 import socket
-import threading
+from pydub import AudioSegment
+import tempfile
 
-# Функция для рекурсивного получения структуры директории
-def get_directory_structure(root_dir):
-    structure = {}
-    for dirpath, dirnames, filenames in os.walk(root_dir):
-        relative_path = os.path.relpath(dirpath, root_dir)
-        if relative_path == '.':
-            relative_path = ''
-        structure[relative_path] = {
-            'directories': dirnames,
-            'files': filenames
-        }
-    return structure
+class AudioServer:
+    def __init__(self, host='localhost', port=5000, audio_dir='audio_files'):
+        self.host = host
+        self.port = port
+        self.audio_dir = audio_dir
+        self.metadata_file = 'audio_metadata.json'
+        self.metadata = {}
+        
+        # Создаем папку для аудио, если ее нет
+        os.makedirs(self.audio_dir, exist_ok=True)
+        self.generate_metadata()
+        
+        # Настройка сокета
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.socket.bind((self.host, self.port))
+        self.socket.listen(5)
+        print(f"Сервер запущен на {self.host}:{self.port}")
 
-# Функция для сохранения структуры в JSON-файл
-def save_structure_to_file(structure, filename='structure.json'):
-    with open(filename, 'w', encoding='utf-8') as f:
-        json.dump(structure, f, indent=4)
+    def generate_metadata(self):
+        """Создает/обновляет файл метаданных"""
+        self.metadata = {}
+        for filename in os.listdir(self.audio_dir):
+            if filename.lower().endswith(('.mp3', '.wav', '.ogg')):
+                filepath = os.path.join(self.audio_dir, filename)
+                try:
+                    audio = AudioSegment.from_file(filepath)
+                    self.metadata[filename] = {
+                        'duration': len(audio) / 1000,  # в секундах
+                        'format': os.path.splitext(filename)[1][1:]
+                    }
+                except Exception as e:
+                    print(f"Ошибка обработки {filename}: {e}")
+        
+        with open(self.metadata_file, 'w') as f:
+            json.dump(self.metadata, f)
 
-# Функция для обработки подключения клиента
-def handle_client(client_socket, addr):
-    print(f"Подключен клиент: {addr}")
-    while True:
+    def handle_client(self, client_socket, addr):
+        print(f"Подключен клиент: {addr}")
         try:
-            # Получаем данные от клиента
-            data = client_socket.recv(1024).decode('utf-8')
-            if not data:
-                break
+            while True:
+                command = client_socket.recv(1024).decode().strip()
+                if not command:
+                    break
 
-            # Обработка команды установки новой корневой директории
-            if data.startswith("SET_ROOT:"):
-                new_root = data.split(":", 1)[1]
-                if os.path.isdir(new_root):
-                    structure = get_directory_structure(new_root)
-                    save_structure_to_file(structure)
-                    client_socket.send("Корневая директория обновлена".encode('utf-8'))
+                if command == 'list':
+                    # Отправляем список файлов
+                    with open(self.metadata_file, 'rb') as f:
+                        data = f.read()
+                        client_socket.sendall(struct.pack('!I', len(data)))
+                        client_socket.sendall(data)
+
+                elif command.startswith('get'):
+                    # Обработка запроса отрезка аудио
+                    _, filename, start, end = command.split()
+                    if filename not in self.metadata:
+                        client_socket.sendall(struct.pack('!I', 0))
+                        continue
+
+                    filepath = os.path.join(self.audio_dir, filename)
+                    audio = AudioSegment.from_file(filepath)
+                    segment = audio[int(start)*1000 : int(end)*1000]
+                    
+                    with tempfile.NamedTemporaryFile(suffix='.mp3') as tmp:
+                        segment.export(tmp.name, format='mp3')
+                        tmp.seek(0)
+                        file_data = tmp.read()
+                    
+                    # Отправляем размер и данные
+                    client_socket.sendall(struct.pack('!I', len(file_data)))
+                    client_socket.sendall(file_data)
+
                 else:
-                    client_socket.send("Недопустимая директория".encode('utf-8'))
+                    client_socket.send(b'Unknown command')
 
-            # Обработка запроса на получение структуры
-            elif data == "GET_STRUCTURE":
-                with open('structure.json', 'rb') as f:
-                    client_socket.sendfile(f)
-            else:
-                client_socket.send("Недопустимая команда".encode('utf-8'))
         except Exception as e:
-            print(f"Ошибка: {e}")
-            break
-    client_socket.close()
-    print(f"Отключен клиент: {addr}")
+            print(f"Ошибка с клиентом {addr}: {e}")
+        finally:
+            client_socket.close()
+            print(f"Отключен клиент: {addr}")
 
-# Основная функция сервера
-def start_server(host='localhost', port=12345):
-    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_socket.bind((host, port))
-    server_socket.listen(5)
-    print(f"Сервер запущен на {host}:{port}")
+    def run(self):
+        while True:
+            client_sock, addr = self.socket.accept()
+            threading.Thread(target=self.handle_client, args=(client_sock, addr)).start()
 
+<<<<<<< HEAD
     while True:
         client_socket, addr = server_socket.accept()
         # Запускаем обработку клиента в отдельном потоке
@@ -73,3 +105,8 @@ def asd():
 if __name__ == "__main__":
     start_server()
 
+=======
+if __name__ == '__main__':
+    server = AudioServer()
+    server.run()    
+>>>>>>> marysht
