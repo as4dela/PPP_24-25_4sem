@@ -66,5 +66,10 @@ def start_server(host='localhost', port=12345):
         thread = threading.Thread(target=handle_client, args=(client_socket, addr))
         thread.start()
 
+def asd():
+    pass
+
+
 if __name__ == "__main__":
     start_server()
+
