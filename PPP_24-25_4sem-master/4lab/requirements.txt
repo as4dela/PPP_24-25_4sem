@@ -1,0 +1,5 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+pydantic
+python-dotenv # Хотя в коде не используется, часто полезен для конфигурации 
